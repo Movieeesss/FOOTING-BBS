@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
-// Bundle data logic from your 15 Excel images
+// Steel Bundle data logic from Excel Reference
 const STEEL_REF: Record<number, { rods: number; bundleWeight: number }> = {
   8:  { rods: 10, bundleWeight: 47.4 },
   10: { rods: 7,  bundleWeight: 51.87 },
@@ -18,10 +18,13 @@ export default function FootingBBSCalculator() {
   ]);
 
   const calculateBBS = (r: any) => {
-    // Formulas taught from your Excel screenshots
+    // Formulas derived from your Excel screenshots
     const sizeM = r.s / 3.281;
+    // ROUNDUP logic for bars on both sides
     const bars = Math.ceil(((sizeM * 1000) - 100) / r.sp + 1) * 2;
+    // Total cutting length including 90 degree bends (0.6666 ft)
     const lengthM = ((r.s + 0.6666) * bars) / 3.281;
+    // Final KG weight logic (D^2 / 162)
     const totalKg = (lengthM * ((r.d * r.d) / 162)) * r.qty;
     return { bars, totalKg };
   };
@@ -51,11 +54,11 @@ export default function FootingBBSCalculator() {
           const res = calculateBBS(row);
           return (
             <div key={row.id} style={{ marginBottom: '20px', borderRadius: '10px', overflow: 'hidden', border: '1px solid #ccc', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
-              {/* Blue Editable Box matching Beam Tool */}
+              {/* Blue Editable Box matching your Beam Tool Design */}
               <div style={{ backgroundColor: '#00b0f0', border: '3px solid #0070c0' }}>
-                <div style={{ backgroundColor: '#0070c0', color: 'white', padding: '5px', fontSize: '11px', fontWeight: 'bold', textAlign: 'center', display: 'flex', justifyContent: 'space-between', paddingHorizontal: '15px' }}>
-                  <span style={{marginLeft: '10px'}}>EDITABLE DATA - {row.tag}</span>
-                  <button onClick={() => deleteRow(row.id)} style={{ background: 'red', color: 'white', border: 'none', borderRadius: '50%', width: '20px', cursor: 'pointer', marginRight: '5px' }}>×</button>
+                <div style={{ backgroundColor: '#0070c0', color: 'white', padding: '5px', fontSize: '11px', fontWeight: 'bold', textAlign: 'center', display: 'flex', justifyContent: 'space-between', paddingLeft: '10px', paddingRight: '5px' }}>
+                  <span>EDITABLE DATA - {row.tag}</span>
+                  <button onClick={() => deleteRow(row.id)} style={{ background: 'red', color: 'white', border: 'none', borderRadius: '50%', width: '20px', height: '20px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
                 </div>
                 
                 <div style={{ padding: '10px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -80,7 +83,7 @@ export default function FootingBBSCalculator() {
                 </div>
               </div>
 
-              {/* Yellow Results Section */}
+              {/* Yellow Results Section derived from your Beam tool's color tone */}
               <ResultRow label="No. of Bars (Both sides)" value={res.bars} unit="Nos" />
               <div style={{ backgroundColor: '#92d050', padding: '10px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '2px solid #76b041' }}>
                 <span style={{ fontWeight: '900', fontSize: '14px', fontStyle: 'italic' }}>BALANCE STEEL</span>
