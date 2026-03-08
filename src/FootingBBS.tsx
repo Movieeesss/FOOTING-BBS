@@ -2,150 +2,102 @@ import React, { useState } from 'react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
-// Steel Bundle Data from your Excel reference
-const STEEL_REF: Record<number, { rods: number; weight: number }> = {
-  8:  { rods: 10, weight: 47.4 },
-  10: { rods: 7,  weight: 51.87 },
-  12: { rods: 5,  weight: 53.35 },
-  16: { rods: 3,  weight: 56.88 },
-  20: { rods: 2,  weight: 59.26 },
-  25: { rods: 1,  weight: 46.3 },
+// Bundle data logic from your 15 Excel images
+const STEEL_REF: Record<number, { rods: number; bundleWeight: number }> = {
+  8:  { rods: 10, bundleWeight: 47.4 },
+  10: { rods: 7,  bundleWeight: 51.87 },
+  12: { rods: 5,  bundleWeight: 53.35 },
+  16: { rods: 3,  bundleWeight: 56.88 },
+  20: { rods: 2,  bundleWeight: 59.26 },
+  25: { rods: 1,  bundleWeight: 46.3 },
 };
 
-const FootingBBS = () => {
+export default function FootingBBSCalculator() {
   const [rows, setRows] = useState<any[]>([
     { id: 1, tag: 'T1', s: 4, d: 10, sp: 150, qty: 3 }
   ]);
 
-  // Logic from your Excel Formulas
-  const calculateResult = (r: any) => {
+  const calculateBBS = (r: any) => {
+    // Formulas taught from your Excel screenshots
     const sizeM = r.s / 3.281;
-    // Formula from your sheet: =ROUNDUP((((Size/3.281)*1000)-100)/(Spacing)+1,0)*2
     const bars = Math.ceil(((sizeM * 1000) - 100) / r.sp + 1) * 2;
-    // Formula from your sheet: =(Size+0.3333+0.3333)*Bars/3.281
     const lengthM = ((r.s + 0.6666) * bars) / 3.281;
-    // Formula: =(Length * (Dia^2 / 162)) * Qty
     const totalKg = (lengthM * ((r.d * r.d) / 162)) * r.qty;
-    
     return { bars, totalKg };
   };
 
   const addRow = () => setRows([...rows, { id: Date.now(), tag: `T${rows.length + 1}`, s: 4, d: 10, sp: 150, qty: 1 }]);
-  const deleteRow = (id: number) => setRows(rows.filter(r => r.id !== id));
+  const deleteRow = (id: number) => setRows(rows.filter(row => row.id !== id));
+  
   const updateRow = (id: number, field: string, val: any) => {
-    setRows(rows.map(r => r.id === id ? { ...r, [field]: val } : r));
+    setRows(rows.map(row => row.id === id ? { ...row, [field]: val } : row));
   };
 
-  const generatePDF = () => {
-    const doc = new jsPDF();
-    doc.setFontSize(18);
-    doc.text("FOOTING BBS CALCULATION REPORT", 14, 20);
-    const tableData = rows.map(r => {
-      const res = calculateResult(r);
-      return [r.tag, `${r.s}x${r.s}`, `${r.d}mm`, r.sp, r.qty, res.totalKg.toFixed(2)];
-    });
-    autoTable(doc, {
-      startY: 30,
-      head: [['Type', 'Size (Ft)', 'Dia', 'Spacing', 'Qty', 'Total KG']],
-      body: tableData,
-      theme: 'grid',
-      headStyles: { fillColor: [22, 163, 74] } // Green matching your header
-    });
-    doc.save("Footing_BBS_Report.pdf");
-  };
+  const ResultRow = ({ label, value, unit }: any) => (
+    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', backgroundColor: '#ffff00', borderBottom: '1px solid rgba(0,0,0,0.1)', fontSize: '13px', fontWeight: 'bold' }}>
+      <span>{label}</span>
+      <span>{value} <small style={{fontSize: '10px'}}>{unit}</small></span>
+    </div>
+  );
 
   return (
-    <div className="min-h-screen bg-gray-100 font-sans pb-10">
-      {/* Header matching Doubly Reinforced pattern */}
-      <div className="bg-[#8cc63f] p-4 text-center shadow-md mb-4 sticky top-0 z-50">
-        <h1 className="text-xl font-black uppercase tracking-widest text-white">Footing BBS Calculator</h1>
-      </div>
+    <div style={{ maxWidth: '400px', margin: '0 auto', fontFamily: 'sans-serif', backgroundColor: '#fff', minHeight: '100vh', border: '1px solid #ddd' }}>
+      <header style={{ backgroundColor: '#92d050', padding: '15px', textAlign: 'center', fontWeight: '900', fontSize: '18px', borderBottom: '2px solid #76b041', textTransform: 'uppercase' }}>
+        Footing BBS Calculator
+      </header>
 
-      <div className="max-w-md mx-auto px-4">
+      <div style={{ padding: '12px' }}>
         {rows.map((row) => {
-          const res = calculateResult(row);
+          const res = calculateBBS(row);
           return (
-            <div key={row.id} className="mb-6 shadow-xl rounded-xl overflow-hidden border border-gray-200 bg-white animate-in slide-in-from-bottom-4">
-              {/* Editable Section Header (Blue) */}
-              <div className="bg-[#0088cc] p-3 flex justify-between items-center">
-                <span className="text-white font-bold uppercase tracking-tighter italic">Editable Data - {row.tag}</span>
-                <button 
-                  onClick={() => deleteRow(row.id)} 
-                  className="bg-red-500 text-white w-7 h-7 rounded-full flex items-center justify-center font-bold shadow-inner"
-                >×</button>
-              </div>
-
-              {/* Input Fields (Light Blue Background) */}
-              <div className="p-4 space-y-3 bg-[#e0f2ff]">
-                <div className="flex justify-between items-center bg-white rounded-lg border border-[#00aaff] p-2 shadow-sm">
-                  <label className="text-blue-800 font-bold text-sm">Footing Size (Ft)</label>
-                  <input 
-                    type="number" 
-                    value={row.s} 
-                    onChange={(e) => updateRow(row.id, 's', parseFloat(e.target.value))} 
-                    className="w-20 text-right font-black text-lg outline-none text-gray-800" 
-                  />
+            <div key={row.id} style={{ marginBottom: '20px', borderRadius: '10px', overflow: 'hidden', border: '1px solid #ccc', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
+              {/* Blue Editable Box matching Beam Tool */}
+              <div style={{ backgroundColor: '#00b0f0', border: '3px solid #0070c0' }}>
+                <div style={{ backgroundColor: '#0070c0', color: 'white', padding: '5px', fontSize: '11px', fontWeight: 'bold', textAlign: 'center', display: 'flex', justifyContent: 'space-between', paddingHorizontal: '15px' }}>
+                  <span style={{marginLeft: '10px'}}>EDITABLE DATA - {row.tag}</span>
+                  <button onClick={() => deleteRow(row.id)} style={{ background: 'red', color: 'white', border: 'none', borderRadius: '50%', width: '20px', cursor: 'pointer', marginRight: '5px' }}>×</button>
                 </div>
-                <div className="flex justify-between items-center bg-white rounded-lg border border-[#00aaff] p-2 shadow-sm">
-                  <label className="text-blue-800 font-bold text-sm">Dia of Bars (mm)</label>
-                  <select 
-                    value={row.d} 
-                    onChange={(e) => updateRow(row.id, 'd', parseInt(e.target.value))} 
-                    className="font-black text-lg outline-none bg-transparent text-gray-800"
-                  >
-                    {[8, 10, 12, 16, 20, 25].map(d => <option key={d} value={d}>{d}mm</option>)}
-                  </select>
-                </div>
-                <div className="flex justify-between items-center bg-white rounded-lg border border-[#00aaff] p-2 shadow-sm">
-                  <label className="text-blue-800 font-bold text-sm">Spacing (mm)</label>
-                  <input 
-                    type="number" 
-                    value={row.sp} 
-                    onChange={(e) => updateRow(row.id, 'sp', parseInt(e.target.value))} 
-                    className="w-20 text-right font-black text-lg outline-none text-gray-800" 
-                  />
-                </div>
-                <div className="flex justify-between items-center bg-white rounded-lg border border-[#00aaff] p-2 shadow-sm">
-                  <label className="text-blue-800 font-bold text-sm">Qty (Nos)</label>
-                  <input 
-                    type="number" 
-                    value={row.qty} 
-                    onChange={(e) => updateRow(row.id, 'qty', parseInt(e.target.value))} 
-                    className="w-20 text-right font-black text-lg outline-none text-gray-800" 
-                  />
+                
+                <div style={{ padding: '10px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.2)', padding: '5px 10px', borderRadius: '6px' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 'bold' }}>Size (Ft)</label>
+                    <input type="number" value={row.s} onChange={e => updateRow(row.id, 's', parseFloat(e.target.value))} style={{ width: '80px', textAlign: 'right', padding: '4px', borderRadius: '4px', border: '1px solid #0070c0', fontWeight: 'bold' }} />
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.2)', padding: '5px 10px', borderRadius: '6px' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 'bold' }}>Dia (mm)</label>
+                    <select value={row.d} onChange={e => updateRow(row.id, 'd', parseInt(e.target.value))} style={{ width: '90px', padding: '4px', borderRadius: '4px', border: '1px solid #0070c0', fontWeight: 'bold' }}>
+                      {[8, 10, 12, 16, 20, 25].map(d => <option key={d} value={d}>{d}mm</option>)}
+                    </select>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.2)', padding: '5px 10px', borderRadius: '6px' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 'bold' }}>Spacing (mm)</label>
+                    <input type="number" value={row.sp} onChange={e => updateRow(row.id, 'sp', parseInt(e.target.value))} style={{ width: '80px', textAlign: 'right', padding: '4px', borderRadius: '4px', border: '1px solid #0070c0', fontWeight: 'bold' }} />
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.2)', padding: '5px 10px', borderRadius: '6px' }}>
+                    <label style={{ fontSize: '12px', fontWeight: 'bold' }}>Qty (Nos)</label>
+                    <input type="number" value={row.qty} onChange={e => updateRow(row.id, 'qty', parseInt(e.target.value))} style={{ width: '80px', textAlign: 'right', padding: '4px', borderRadius: '4px', border: '1px solid #0070c0', fontWeight: 'bold' }} />
+                  </div>
                 </div>
               </div>
 
-              {/* Results Section (Yellow Background) */}
-              <div className="bg-[#ffff00] p-4 space-y-2 border-t-2 border-yellow-400">
-                <div className="flex justify-between font-bold text-gray-800 border-b border-yellow-300 pb-1">
-                  <span>No. of Bars (Both sides)</span>
-                  <span className="text-blue-800">{res.bars} Nos</span>
-                </div>
-                <div className="flex justify-between items-center pt-2">
-                  <span className="font-black uppercase text-gray-700 italic">Balance Steel</span>
-                  <span className="text-2xl font-black text-blue-900 tracking-tighter">{res.totalKg.toFixed(2)} KG</span>
-                </div>
+              {/* Yellow Results Section */}
+              <ResultRow label="No. of Bars (Both sides)" value={res.bars} unit="Nos" />
+              <div style={{ backgroundColor: '#92d050', padding: '10px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '2px solid #76b041' }}>
+                <span style={{ fontWeight: '900', fontSize: '14px', fontStyle: 'italic' }}>BALANCE STEEL</span>
+                <span style={{ fontWeight: '900', fontSize: '18px', color: '#003366' }}>{res.totalKg.toFixed(2)} KG</span>
               </div>
             </div>
           );
         })}
 
-        {/* Action Buttons */}
-        <div className="flex flex-col gap-3 mt-4">
-          <button 
-            onClick={addRow} 
-            className="w-full bg-blue-600 text-white font-black p-4 rounded-xl shadow-lg hover:bg-blue-700 active:scale-95 transition-all uppercase tracking-widest"
-          >+ Add New Footing Row</button>
-          
-          <button 
-            onClick={generatePDF} 
-            className="w-full bg-[#333333] text-white font-black p-4 rounded-xl shadow-lg hover:bg-black active:scale-95 transition-all uppercase tracking-widest"
-          >Print to PDF / Save Report</button>
-        </div>
+        <button onClick={addRow} style={{ width: '100%', padding: '12px', backgroundColor: '#0070c0', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 'bold', marginBottom: '10px', cursor: 'pointer' }}>
+          + ADD NEW FOOTING ROW
+        </button>
+
+        <button onClick={() => window.print()} style={{ width: '100%', padding: '15px', backgroundColor: '#333', color: '#fff', border: 'none', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '14px' }}>
+          PRINT TO PDF / SAVE REPORT
+        </button>
       </div>
     </div>
   );
-};
-
-export default FootingBBS;
+}
