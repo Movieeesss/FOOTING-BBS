@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import Tesseract from 'tesseract.js';
 
-// Your Excel Steel Data: Weight and Rods per bundle
-const BUNDLE_DATA: Record<number, { rods: number; weight: number }> = {
+// Bundle data from your 'Weight of one bundle' table
+const STEEL_DATA: Record<number, { rods: number; weight: number }> = {
   8:  { rods: 10, weight: 47.4 },
   10: { rods: 7,  weight: 51.87 },
   12: { rods: 5,  weight: 53.35 },
@@ -11,81 +11,76 @@ const BUNDLE_DATA: Record<number, { rods: number; weight: number }> = {
   25: { rods: 1,  weight: 46.3 },
 };
 
-const FootingBBS = () => {
+const FootingScanner = () => {
   const [loading, setLoading] = useState(false);
-  const [data, setData] = useState<any[]>([]);
+  const [results, setResults] = useState<any[]>([]);
 
-  // Your Excel Logic: =ROUNDUP((((Size/3.281)*1000)-100)/(Spacing)+1,0)*2
-  const calculateSteel = (sizeFt: number, dia: number, spacing: number, count: number) => {
+  const calculateBBS = (sizeFt: number, dia: number, spacing: number, count: number) => {
     const sizeM = sizeFt / 3.281;
+    // Your Formula: ROUNDUP((((Size/3.281)*1000)-100)/(Spacing)+1,0)*2
     const noOfBars = Math.ceil(((sizeM * 1000) - 100) / spacing + 1) * 2;
-    const cutLength = ((sizeFt + 0.6666) * noOfBars) / 3.281;
-    const totalKg = (cutLength * ((dia * dia) / 162)) * count;
+    // Your Formula: (Size + 0.3333 + 0.3333) * NoBars / 3.281
+    const totalLengthM = ((sizeFt + 0.6666) * noOfBars) / 3.281;
+    const totalKg = (totalLengthM * ((dia * dia) / 162)) * count;
     
-    const bundle = BUNDLE_DATA[dia];
-    const reqBundles = totalKg / (bundle?.weight || 1);
+    const bundle = STEEL_DATA[dia];
+    const bundlesNeeded = totalKg / (bundle?.weight || 1);
 
-    return { noOfBars, totalKg, reqBundles };
+    return { noOfBars, totalKg, bundlesNeeded };
   };
 
-  const handleScan = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
     setLoading(true);
     const { data: { text } } = await Tesseract.recognize(e.target.files[0], 'eng');
 
-    // Searching drawing for Footing Types
     const tags = ['T1', 'T2', 'T3', 'T4', 'T5'];
-    const results = tags.map(tag => {
-      const occurrences = (text.match(new RegExp(tag, 'g')) || []).length;
-      if (occurrences === 0) return null;
+    const finalData = tags.map(tag => {
+      const foundCount = (text.match(new RegExp(tag, 'g')) || []).length;
+      if (foundCount === 0) return null;
 
-      // Map sizes from your detail sheet
       const specs: any = {
-        T1: { size: 4, d: 10, s: 150 },
-        T2: { size: 4.5, d: 10, s: 120 },
-        T3: { size: 5, d: 12, s: 120 },
-        T4: { size: 5.5, d: 12, s: 120 },
-        T5: { size: 6, d: 12, s: 120 },
+        T1: { s: 4, d: 10, sp: 150 },
+        T2: { s: 4.5, d: 10, sp: 120 },
+        T3: { s: 5, d: 12, sp: 120 },
+        T4: { s: 5.5, d: 12, sp: 120 },
+        T5: { s: 6, d: 12, sp: 120 },
       }[tag];
 
-      return { tag, count: occurrences, ...specs, ...calculateSteel(specs.size, specs.d, specs.s, occurrences) };
+      return { tag, count: foundCount, ...specs, ...calculateBBS(specs.s, specs.d, specs.sp, foundCount) };
     }).filter(Boolean);
 
-    setData(results);
+    setResults(finalData);
     setLoading(false);
   };
 
   return (
-    <div className="p-6 max-w-4xl mx-auto font-sans">
-      <div className="bg-green-600 text-white p-6 rounded-t-xl shadow-lg">
-        <h1 className="text-2xl font-bold italic">UNIQ DESIGNS - FOOTING BBS SCANNER</h1>
+    <div className="p-6 max-w-5xl mx-auto bg-gray-50 min-h-screen">
+      <div className="bg-green-700 text-white p-8 rounded-t-2xl shadow-lg">
+        <h1 className="text-3xl font-black italic">UNIQ DESIGNS - BBS AUTOMATOR</h1>
       </div>
-
-      <div className="bg-white p-8 border-x border-b shadow-sm rounded-b-xl">
-        <label className="block mb-4 font-bold text-gray-700">Upload Footing Layout Drawing</label>
-        <input type="file" onChange={handleScan} className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100" />
-        
-        {loading && <p className="mt-4 text-blue-600 font-bold animate-pulse">Scanning drawing... Please wait...</p>}
-
-        {data.length > 0 && (
-          <table className="w-full mt-8 border-collapse">
-            <thead>
-              <tr className="bg-gray-100 text-left text-xs uppercase text-gray-600">
+      <div className="bg-white p-8 border shadow-md rounded-b-2xl">
+        <input type="file" onChange={handleFileUpload} className="block w-full text-sm mb-6 file:mr-4 file:py-2 file:px-4 file:rounded-full file:bg-green-600 file:text-white" />
+        {loading && <p className="text-center font-bold animate-pulse">Scanning Drawing...</p>}
+        {results.length > 0 && (
+          <table className="w-full border-collapse mt-4">
+            <thead className="bg-gray-800 text-white">
+              <tr>
                 <th className="p-3 border">Type</th>
-                <th className="p-3 border">Nos Found</th>
+                <th className="p-3 border">Nos</th>
                 <th className="p-3 border">Bars/Ft</th>
-                <th className="p-3 border bg-yellow-100">Total KG</th>
+                <th className="p-3 border bg-yellow-600">Total KG</th>
                 <th className="p-3 border">Bundles</th>
               </tr>
             </thead>
             <tbody>
-              {data.map((item, i) => (
-                <tr key={i} className="border-b">
-                  <td className="p-3 font-bold">{item.tag}</td>
-                  <td className="p-3 text-blue-600 font-bold">{item.count}</td>
-                  <td className="p-3">{item.noOfBars}</td>
-                  <td className="p-3 font-black text-red-600">{item.totalKg.toFixed(2)}</td>
-                  <td className="p-3">{item.reqBundles.toFixed(2)}</td>
+              {results.map((r, i) => (
+                <tr key={i} className="text-center border-b">
+                  <td className="p-3 font-bold">{r.tag}</td>
+                  <td className="p-3">{r.count}</td>
+                  <td className="p-3">{r.noOfBars}</td>
+                  <td className="p-3 font-black text-red-600">{r.totalKg.toFixed(1)}</td>
+                  <td className="p-3">{r.bundlesNeeded.toFixed(2)}</td>
                 </tr>
               ))}
             </tbody>
@@ -96,4 +91,4 @@ const FootingBBS = () => {
   );
 };
 
-export default FootingBBS;
+export default FootingScanner;
