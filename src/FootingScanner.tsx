@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import Tesseract from 'tesseract.js';
 
-// Your Excel Steel Data Table
-const STEEL_TABLE: Record<number, { rods: number; bundleWeight: number }> = {
+// Weight and Rod data from your Excel
+const STEEL_REF: Record<number, { rods: number; bundleWeight: number }> = {
   8:  { rods: 10, bundleWeight: 47.4 },
   10: { rods: 7,  bundleWeight: 51.87 },
   12: { rods: 5,  bundleWeight: 53.35 },
@@ -11,96 +11,120 @@ const STEEL_TABLE: Record<number, { rods: number; bundleWeight: number }> = {
   25: { rods: 1,  bundleWeight: 46.3 },
 };
 
+interface FootingSpecs {
+  size: number;
+  dia: number;
+  spacing: number;
+}
+
 const FootingScanner = () => {
   const [loading, setLoading] = useState(false);
-  const [results, setResults] = useState<any[]>([]);
+  const [library, setLibrary] = useState<Record<string, FootingSpecs>>({});
+  const [finalReport, setFinalReport] = useState<any[]>([]);
 
-  // The Brain: Your Excel Formulas Integrated
-  const calculateSteel = (type: string, sizeFt: number, dia: number, spacing: number, count: number) => {
-    const sizeM = sizeFt / 3.281; 
+  // Your exact Excel Calculation Logic
+  const runBBS = (type: string, specs: FootingSpecs, count: number) => {
+    const sizeM = specs.size / 3.281;
     
-    // 1. No. of Bars (Both Sides)
-    // Formula: ROUNDUP((((Size/3.281)*1000)-100)/(Spacing)+1,0)*2
-    const noOfBars = Math.ceil(((sizeM * 1000) - 100) / spacing + 1) * 2;
+    // Formula: ROUNDUP((((Size_M)*1000)-100)/(Spacing)+1,0)*2
+    const noOfBars = Math.ceil(((sizeM * 1000) - 100) / specs.spacing + 1) * 2;
 
-    // 2. Total Cutting Length with 90 deg bend (in Meters)
-    // Formula: (Size + 0.6666) * NoOfBars / 3.281
-    const totalLengthM = ((sizeFt + 0.6666) * noOfBars) / 3.281;
+    // Formula: (Size_Ft + 0.6666) * NoBars / 3.281 (Total Cutting Length in M)
+    const totalLengthM = ((specs.size + 0.6666) * noOfBars) / 3.281;
 
-    // 3. Unit Weight (D^2 / 162)
-    const unitWeight = (dia * dia) / 162;
-    const totalKgPerFooting = totalLengthM * unitWeight;
-    const totalKgAll = totalKgPerFooting * count;
+    const unitWeight = (specs.dia * specs.dia) / 162;
+    const totalKg = totalLengthM * unitWeight * count; //
 
-    // 4. Bundle Logic
-    const bundle = STEEL_TABLE[dia];
-    const reqBundles = totalKgAll / (bundle?.bundleWeight || 1);
+    const ref = STEEL_REF[specs.dia];
+    const bundles = totalKg / (ref?.bundleWeight || 1); //
 
-    return { noOfBars, totalLengthM, totalKgAll, reqBundles };
+    return { noOfBars, totalKg, bundles };
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // STEP 1: Scan Footing Detail Image to store specs
+  const scanDetailTable = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
     setLoading(true);
+    const { data: { text } } = await Tesseract.recognize(e.target.files[0], 'eng');
     
-    const file = e.target.files[0];
-    const { data: { text } } = await Tesseract.recognize(file, 'eng');
-
-    // Simple Logic: Scan text for "T1", "T2", etc. and count them
-    const foundTags = ['T1', 'T2', 'T3', 'T4', 'T5'];
-    const newResults = foundTags.map(tag => {
-      const occurrences = (text.match(new RegExp(tag, 'g')) || []).length;
-      
-      // Default values from your example
-      const mockData: any = {
-        T1: { size: 4, dia: 10, space: 150 },
-        T2: { size: 4.5, dia: 10, space: 120 },
-        T3: { size: 5, dia: 12, space: 120 },
-        T4: { size: 5.5, dia: 12, space: 120 },
-        T5: { size: 6, dia: 12, space: 120 },
-      };
-
-      const data = mockData[tag];
-      const calculations = calculateSteel(tag, data.size, data.dia, data.space, occurrences);
-
-      return { tag, count: occurrences, ...data, ...calculations };
+    // Simple logic to find T1, T2 etc. in the text and assign defaults if found
+    const newLibrary: Record<string, FootingSpecs> = {};
+    const tags = ['T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+    
+    tags.forEach(tag => {
+      if (text.includes(tag)) {
+        // Here you can add logic to regex the size, or keep your manual defaults
+        if (tag === 'T1') newLibrary[tag] = { size: 4, dia: 10, spacing: 150 };
+        if (tag === 'T2') newLibrary[tag] = { size: 4.5, dia: 10, spacing: 120 };
+        if (tag === 'T3') newLibrary[tag] = { size: 5, dia: 12, spacing: 120 };
+        if (tag === 'T4') newLibrary[tag] = { size: 5.5, dia: 12, spacing: 120 };
+        if (tag === 'T5') newLibrary[tag] = { size: 6, dia: 12, spacing: 120 };
+      }
     });
+    setLibrary(newLibrary);
+    setLoading(false);
+    alert("Detail Table Scanned! Now upload the Layout.");
+  };
 
-    setResults(newResults.filter(r => r.count > 0));
+  // STEP 2: Scan Layout to count tags
+  const scanLayout = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files) return;
+    setLoading(true);
+    const { data: { text } } = await Tesseract.recognize(e.target.files[0], 'eng');
+
+    const report = Object.keys(library).map(tag => {
+      const count = (text.match(new RegExp(tag, 'g')) || []).length;
+      if (count === 0) return null;
+
+      const calc = runBBS(tag, library[tag], count);
+      return { tag, count, ...library[tag], ...calc };
+    }).filter(Boolean);
+
+    setFinalReport(report);
     setLoading(false);
   };
 
   return (
-    <div className="p-8 bg-white rounded-xl shadow-lg border border-gray-200">
-      <h1 className="text-3xl font-black text-green-700 mb-6 uppercase italic">Footing BBS Automation</h1>
-      
-      <div className="mb-8 p-6 border-2 border-dashed border-green-300 rounded-lg text-center">
-        <p className="mb-4 text-gray-600 font-bold">Upload Footing Layout Image</p>
-        <input type="file" onChange={handleFileUpload} className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100" />
+    <div className="p-6 max-w-5xl mx-auto bg-gray-50 font-sans">
+      <header className="bg-green-700 text-white p-6 rounded-t-xl mb-4">
+        <h1 className="text-2xl font-black italic">UNIQ DESIGNS - BBS AUTOMATOR</h1>
+      </header>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        <div className="p-4 bg-white shadow rounded-lg border-l-4 border-blue-500">
+          <label className="block font-bold text-gray-700 mb-2">1. Upload Footing Detail (Table)</label>
+          <input type="file" onChange={scanDetailTable} className="w-full text-sm" />
+        </div>
+        <div className="p-4 bg-white shadow rounded-lg border-l-4 border-green-500">
+          <label className="block font-bold text-gray-700 mb-2">2. Upload Footing Layout (Drawing)</label>
+          <input type="file" onChange={scanLayout} disabled={Object.keys(library).length === 0} className="w-full text-sm disabled:opacity-50" />
+        </div>
       </div>
 
-      {loading && <div className="text-center font-bold text-blue-600 animate-pulse">Scanning Drawing... Please wait...</div>}
+      {loading && <div className="p-10 text-center font-bold text-green-600 animate-bounce text-xl">PROCESSSING DRAWING...</div>}
 
-      {results.length > 0 && (
-        <div className="overflow-x-auto">
+      {finalReport.length > 0 && (
+        <div className="bg-white shadow-xl rounded-xl overflow-hidden">
           <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-green-600 text-white uppercase text-xs">
-                <th className="p-3 border border-green-700">Type</th>
-                <th className="p-3 border border-green-700">Found Nos</th>
-                <th className="p-3 border border-green-700">Bars (Both Sides)</th>
-                <th className="p-3 border border-green-700 font-black">Total KGs</th>
-                <th className="p-3 border border-green-700">Bundles</th>
+            <thead className="bg-gray-800 text-white">
+              <tr>
+                <th className="p-4 border">TYPE</th>
+                <th className="p-4 border">NOS</th>
+                <th className="p-4 border">DIA</th>
+                <th className="p-4 border">BARS/FOOTING</th>
+                <th className="p-4 border bg-yellow-600">TOTAL KG</th>
+                <th className="p-4 border">BUNDLES</th>
               </tr>
             </thead>
             <tbody>
-              {results.map((res, i) => (
-                <tr key={i} className="hover:bg-green-50">
-                  <td className="p-3 border font-bold">{res.tag}</td>
-                  <td className="p-3 border text-blue-700 font-bold">{res.count}</td>
-                  <td className="p-3 border">{res.noOfBars}</td>
-                  <td className="p-3 border bg-yellow-100 font-black text-red-600">{res.totalKgAll.toFixed(2)}</td>
-                  <td className="p-3 border">{res.reqBundles.toFixed(2)}</td>
+              {finalReport.map((item, i) => (
+                <tr key={i} className="border-b hover:bg-green-50">
+                  <td className="p-4 font-bold border">{item.tag}</td>
+                  <td className="p-4 text-blue-600 font-bold border">{item.count}</td>
+                  <td className="p-4 border">{item.dia}mm</td>
+                  <td className="p-4 border">{item.noOfBars}</td>
+                  <td className="p-4 bg-yellow-100 font-black text-red-700 border text-lg">{item.totalKg.toFixed(2)}</td>
+                  <td className="p-4 border font-bold">{item.bundles.toFixed(2)}</td>
                 </tr>
               ))}
             </tbody>
