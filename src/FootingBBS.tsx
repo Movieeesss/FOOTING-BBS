@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import Tesseract from 'tesseract.js';
+import React, { useState } from 'react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
-const STEEL_DATA: Record<number, { rods: number; weight: number }> = {
+// Steel Bundle Data from Excel Reference
+const STEEL_REF: Record<number, { rods: number; weight: number }> = {
   8:  { rods: 10, weight: 47.4 },
   10: { rods: 7,  weight: 51.87 },
   12: { rods: 5,  weight: 53.35 },
@@ -13,91 +13,106 @@ const STEEL_DATA: Record<number, { rods: number; weight: number }> = {
 };
 
 const FootingBBS = () => {
-  const [loading, setLoading] = useState(false);
   const [rows, setRows] = useState<any[]>([
-    { id: Date.now(), tag: 'T1', s: 4, d: 10, sp: 150, qty: 3 }
+    { id: 1, tag: 'T1', s: 4, d: 10, sp: 150, qty: 3 }
   ]);
 
-  const calculateRow = (r: any) => {
+  // Logic from Excel Formulas
+  const calculateResult = (r: any) => {
     const sizeM = r.s / 3.281;
+    // =ROUNDUP((((Size/3.281)*1000)-100)/(Spacing)+1,0)*2
     const bars = Math.ceil(((sizeM * 1000) - 100) / r.sp + 1) * 2;
+    // =(Size+0.3333+0.3333)*Bars/3.281
     const lengthM = ((r.s + 0.6666) * bars) / 3.281;
+    // =(Length * (Dia^2 / 162)) * Qty
     const totalKg = (lengthM * ((r.d * r.d) / 162)) * r.qty;
-    const bundle = STEEL_DATA[r.d];
-    const bundlesNeeded = totalKg / (bundle?.weight || 1);
-    return { ...r, bars, lengthM, totalKg, bundlesNeeded };
+    
+    return { bars, totalKg };
   };
 
   const addRow = () => setRows([...rows, { id: Date.now(), tag: `T${rows.length + 1}`, s: 4, d: 10, sp: 150, qty: 1 }]);
-  
   const deleteRow = (id: number) => setRows(rows.filter(r => r.id !== id));
-
-  const updateRow = (id: number, field: string, value: any) => {
-    setRows(rows.map(r => r.id === id ? { ...r, [field]: parseFloat(value) || 0 } : r));
+  const updateRow = (id: number, field: string, val: any) => {
+    setRows(rows.map(r => r.id === id ? { ...r, [field]: val } : r));
   };
 
-  const downloadPDF = () => {
+  const generatePDF = () => {
     const doc = new jsPDF();
-    doc.text("FOOTING BBS REPORT", 14, 15);
+    doc.setFontSize(18);
+    doc.text("FOOTING BBS CALCULATION REPORT", 14, 20);
+    const tableData = rows.map(r => {
+      const res = calculateResult(r);
+      return [r.tag, `${r.s}x${r.s}`, `${r.d}mm`, r.sp, r.qty, res.totalKg.toFixed(2)];
+    });
     autoTable(doc, {
-      startY: 20,
-      head: [['Type', 'Size', 'Dia', 'Spacing', 'Qty', 'Total KG']],
-      body: rows.map(r => {
-        const c = calculateRow(r);
-        return [c.tag, `${c.s}ft`, `${c.d}mm`, `${c.sp}mm`, c.qty, c.totalKg.toFixed(1)];
-      }),
+      startY: 30,
+      head: [['Type', 'Size (Ft)', 'Dia', 'Spacing', 'Qty', 'Total KG']],
+      body: tableData,
+      theme: 'grid',
+      headStyles: { fillColor: [22, 163, 74] }
     });
     doc.save("Footing_BBS_Report.pdf");
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20 font-sans">
-      <div className="bg-green-600 text-white p-4 sticky top-0 shadow-md z-10 flex justify-between items-center">
-        <h1 className="text-lg font-black italic">FOOTING BBS CALCULATOR</h1>
-        <button onClick={downloadPDF} className="bg-white text-green-700 px-3 py-1 rounded-md text-xs font-bold shadow">PDF</button>
+    <div className="min-h-screen bg-gray-100 font-sans pb-10">
+      {/* Header matching Beam Tool */}
+      <div className="bg-[#8cc63f] p-4 text-center shadow-md mb-4">
+        <h1 className="text-xl font-black uppercase tracking-widest text-white">Footing BBS Calculator</h1>
       </div>
 
-      <div className="p-2">
+      <div className="max-w-md mx-auto px-4">
         {rows.map((row) => {
-          const res = calculateRow(row);
+          const res = calculateResult(row);
           return (
-            <div key={row.id} className="bg-white mb-4 rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-              <div className="bg-gray-800 text-white px-3 py-1 flex justify-between items-center">
-                <span className="font-bold">{row.tag}</span>
-                <button onClick={() => deleteRow(row.id)} className="text-red-400 font-bold text-lg">×</button>
+            <div key={row.id} className="mb-6 shadow-xl rounded-xl overflow-hidden border border-gray-200 bg-white">
+              {/* Editable Section (Blue Header) */}
+              <div className="bg-[#0088cc] p-3 flex justify-between items-center">
+                <span className="text-white font-bold uppercase tracking-tighter italic">Editable Data - {row.tag}</span>
+                <button onClick={() => deleteRow(row.id)} className="bg-red-500 text-white w-6 h-6 rounded-full flex items-center justify-center font-bold">×</button>
               </div>
-              
-              <div className="grid grid-cols-2 gap-2 p-3">
-                <div className="bg-sky-100 p-2 rounded">
-                  <label className="text-[10px] block font-bold text-gray-500 uppercase">Size (Ft)</label>
-                  <input type="number" value={row.s} onChange={(e) => updateRow(row.id, 's', e.target.value)} className="w-full bg-transparent font-bold text-blue-800 outline-none" />
+
+              <div className="p-4 space-y-3 bg-[#e0f2ff]">
+                <div className="flex justify-between items-center bg-white rounded-lg border border-[#00aaff] p-2">
+                  <label className="text-blue-800 font-bold text-sm">Footing Size (Ft)</label>
+                  <input type="number" value={row.s} onChange={(e) => updateRow(row.id, 's', parseFloat(e.target.value))} className="w-20 text-right font-black text-lg outline-none" />
                 </div>
-                <div className="bg-sky-100 p-2 rounded">
-                  <label className="text-[10px] block font-bold text-gray-500 uppercase">Dia (mm)</label>
-                  <select value={row.d} onChange={(e) => updateRow(row.id, 'd', e.target.value)} className="w-full bg-transparent font-bold text-blue-800 outline-none">
+                <div className="flex justify-between items-center bg-white rounded-lg border border-[#00aaff] p-2">
+                  <label className="text-blue-800 font-bold text-sm">Dia of Bars (mm)</label>
+                  <select value={row.d} onChange={(e) => updateRow(row.id, 'd', parseInt(e.target.value))} className="font-black text-lg outline-none bg-transparent">
                     {[8, 10, 12, 16, 20, 25].map(d => <option key={d} value={d}>{d}mm</option>)}
                   </select>
                 </div>
-                <div className="bg-sky-100 p-2 rounded">
-                  <label className="text-[10px] block font-bold text-gray-500 uppercase">Spacing (mm)</label>
-                  <input type="number" value={row.sp} onChange={(e) => updateRow(row.id, 'sp', e.target.value)} className="w-full bg-transparent font-bold text-blue-800 outline-none" />
+                <div className="flex justify-between items-center bg-white rounded-lg border border-[#00aaff] p-2">
+                  <label className="text-blue-800 font-bold text-sm">Spacing (mm)</label>
+                  <input type="number" value={row.sp} onChange={(e) => updateRow(row.id, 'sp', parseInt(e.target.value))} className="w-20 text-right font-black text-lg outline-none" />
                 </div>
-                <div className="bg-sky-100 p-2 rounded">
-                  <label className="text-[10px] block font-bold text-gray-500 uppercase">Qty (Nos)</label>
-                  <input type="number" value={row.qty} onChange={(e) => updateRow(row.id, 'qty', e.target.value)} className="w-full bg-transparent font-black text-blue-900 outline-none" />
+                <div className="flex justify-between items-center bg-white rounded-lg border border-[#00aaff] p-2">
+                  <label className="text-blue-800 font-bold text-sm">Qty (Nos)</label>
+                  <input type="number" value={row.qty} onChange={(e) => updateRow(row.id, 'qty', parseInt(e.target.value))} className="w-20 text-right font-black text-lg outline-none" />
                 </div>
               </div>
 
-              <div className="bg-yellow-400 p-3 flex justify-between items-center border-t border-yellow-500">
-                <span className="text-[10px] font-bold uppercase">Balance KG</span>
-                <span className="text-xl font-black italic">{res.totalKg.toFixed(1)} KG</span>
+              {/* Results Section (Yellow) */}
+              <div className="bg-[#ffff00] p-4 space-y-2 border-t-2 border-yellow-400">
+                <div className="flex justify-between font-bold text-gray-800 border-b border-yellow-300 pb-1">
+                  <span>No. of Bars (Both sides)</span>
+                  <span>{res.bars} Nos</span>
+                </div>
+                <div className="flex justify-between items-center pt-2">
+                  <span className="font-black uppercase text-gray-700 italic">Balance Steel</span>
+                  <span className="text-2xl font-black text-blue-900 tracking-tighter">{res.totalKg.toFixed(2)} KG</span>
+                </div>
               </div>
             </div>
           );
         })}
-      </div>
 
-      <button onClick={addRow} className="fixed bottom-6 right-6 w-14 h-14 bg-green-600 text-white rounded-full text-3xl shadow-2xl flex items-center justify-center font-bold">+</button>
+        <div className="flex flex-col gap-3 mt-4">
+          <button onClick={addRow} className="w-full bg-blue-600 text-white font-black p-3 rounded-lg shadow-lg hover:bg-blue-700 uppercase tracking-widest">+ Add New Footing Row</button>
+          <button onClick={generatePDF} className="w-full bg-[#333333] text-white font-black p-4 rounded-lg shadow-lg hover:bg-black uppercase tracking-widest">Print to PDF / Save Report</button>
+        </div>
+      </div>
     </div>
   );
 };
