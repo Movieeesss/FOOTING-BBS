@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import Tesseract from 'tesseract.js';
 
-// Exact steel data from your reference table (Image_a9818a)
+// Precise steel data from your reference table
 const STEEL_REF: Record<number, { rods: number; bundleWeight: number }> = {
   8:  { rods: 10, bundleWeight: 47.4 },
   10: { rods: 7,  bundleWeight: 51.87 },
@@ -16,20 +16,20 @@ const FootingBBSCalculator = () => {
   const [results, setResults] = useState<any[]>([]);
 
   const calculateExcelLogic = (sizeFt: number, dia: number, spacing: number, count: number) => {
-    // 1. Convert Ft to Meters for spacing calc
+    // 1. Convert Ft to Meters for spacing calculation
     const sizeM = sizeFt / 3.281;
     
-    // 2. No. of bars (Both sides) - Excel: ROUNDUP((((B5/3.281)*1000)-100)/(E5)+1,0)*2
+    // 2. No. of bars (Both sides) - Match your Excel ROUNDUP logic
     const noOfBars = Math.ceil(((sizeM * 1000) - 100) / spacing + 1) * 2;
 
-    // 3. Total Cutting Length with 90 bend - Excel: (B5+0.3333+0.3333)*F5/3.281
+    // 3. Total Cutting Length with 90 deg bends (0.3333 ft each side)
     const totalLengthM = ((sizeFt + 0.6666) * noOfBars) / 3.281;
 
     // 4. Weight Calculation (D^2 / 162)
     const unitWeight = (dia * dia) / 162;
     const totalKg = totalLengthM * unitWeight * count;
 
-    // 5. Bundle Conversion - Excel: SWITCH logic for bundle weights
+    // 5. Bundle Conversion - Matches your SWITCH logic
     const ref = STEEL_REF[dia];
     const bundles = totalKg / (ref?.bundleWeight || 1);
 
@@ -44,17 +44,17 @@ const FootingBBSCalculator = () => {
     const tags = ['T1', 'T2', 'T3', 'T4', 'T5'];
     
     const finalReport = tags.map(tag => {
-      // Scans image text for occurrences of T1, T2, etc.
+      // Scans image text for occurrences of footing types
       const foundCount = (text.match(new RegExp(tag, 'g')) || []).length;
       if (foundCount === 0) return null;
 
-      // Matching your Excel specs (Image_a990e6)
+      // Matching your Excel specs directly
       const specs: any = {
         T1: { s: 4, d: 10, sp: 150 },
         T2: { s: 4.5, d: 10, sp: 120 },
         T3: { s: 5, d: 12, sp: 120 },
-        T4: { s: 5.5, d: 12, sp: 120 },
-        T5: { s: 6, d: 12, sp: 120 },
+        T4: { s: 5.5, d: 12, sp: 100 },
+        T5: { s: 6, d: 12, sp: 100 },
       }[tag];
 
       const calcs = calculateExcelLogic(specs.s, specs.d, specs.sp, foundCount);
@@ -73,32 +73,32 @@ const FootingBBSCalculator = () => {
 
       <div className="bg-white p-6 border-x border-b shadow-sm rounded-b-lg">
         <div className="mb-6 p-4 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50">
-          <label className="block text-sm font-bold mb-2">Upload Footing Layout or Details (Image/PDF)</label>
-          <input type="file" onChange={handleScan} className="block w-full text-sm" />
+          <label className="block text-sm font-bold mb-2 uppercase italic text-gray-600">Upload Drawing (Image/PDF)</label>
+          <input type="file" onChange={handleScan} className="block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />
         </div>
 
-        {loading && <div className="text-center py-10 font-bold text-blue-600 animate-pulse">Calculating matching Excel values...</div>}
+        {loading && <div className="text-center py-10 font-bold text-blue-600 animate-pulse uppercase">Scanning drawing for T1-T5...</div>}
 
         {results.length > 0 && (
           <div className="overflow-x-auto mt-4">
             <table className="w-full border-collapse border text-sm">
               <thead className="bg-gray-100 uppercase text-xs">
                 <tr>
-                  <th className="p-3 border">Footing Type</th>
-                  <th className="p-3 border text-blue-700">Nos Found</th>
+                  <th className="p-3 border">Type</th>
+                  <th className="p-3 border">Qty</th>
                   <th className="p-3 border">Bars (Nos)</th>
                   <th className="p-3 border bg-yellow-100 text-red-700 font-bold">Total KG</th>
-                  <th className="p-3 border">Required Bundles</th>
+                  <th className="p-3 border">Bundles</th>
                 </tr>
               </thead>
               <tbody>
                 {results.map((r, i) => (
-                  <tr key={i} className="text-center border-b hover:bg-gray-50 transition-colors">
-                    <td className="p-3 border font-bold">{r.tag}</td>
-                    <td className="p-3 border font-black text-blue-600 text-lg">{r.count}</td>
+                  <tr key={i} className="text-center border-b hover:bg-blue-50 transition-colors">
+                    <td className="p-3 border font-bold uppercase">{r.tag}</td>
+                    <td className="p-3 border font-black text-blue-700 text-lg">{r.count}</td>
                     <td className="p-3 border">{r.noOfBars}</td>
-                    <td className="p-3 border font-black bg-yellow-50 text-red-600 text-xl">{r.totalKg.toFixed(1)}</td>
-                    <td className="p-3 border font-bold">{r.bundles.toFixed(3)}</td>
+                    <td className="p-3 border font-black bg-yellow-50 text-red-600 text-xl italic">{r.totalKg.toFixed(1)}</td>
+                    <td className="p-3 border font-bold text-gray-600">{r.bundles.toFixed(3)}</td>
                   </tr>
                 ))}
               </tbody>
