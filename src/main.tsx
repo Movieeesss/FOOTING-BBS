@@ -1,10 +1,10 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import FootingScanner from './FootingScanner'
-import './style.css' // Make sure this matches your filename!
+import FootingBBSCalculator from './FootingScanner'
+import './style.css'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <FootingScanner />
+    <FootingBBSCalculator />
   </React.StrictMode>,
 )
