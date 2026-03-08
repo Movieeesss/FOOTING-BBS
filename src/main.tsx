@@ -1,11 +1,10 @@
-import FootingScanner from './FootingScanner';
+import React from 'react'
+import ReactDOM from 'react-dom/client'
+import FootingBBS from './FootingBBS'
+import './index.css'
 
-function App() {
-  return (
-    <div className="min-h-screen bg-gray-100 p-4">
-      <FootingScanner />
-    </div>
-  );
-}
-
-export default App;
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <FootingBBS />
+  </React.StrictMode>,
+)
